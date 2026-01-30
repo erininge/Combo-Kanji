@@ -282,8 +282,37 @@ kbd{
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 14px;
-  padding: 10px;
+  padding: 8px;
   min-height: 44px;
+}
+.lessonDropdown{
+  border-radius: 12px;
+}
+.lessonDropdown[open]{
+  background: rgba(0,0,0,0.16);
+}
+.lessonSummary{
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-weight: 800;
+  color: var(--text);
+  background: rgba(255,255,255,0.04);
+}
+.lessonSummary::-webkit-details-marker{
+  display:none;
+}
+.lessonSummaryCount{
+  font-size: 12px;
+  color: var(--muted);
+}
+.lessonDropdownBody{
+  margin-top: 8px;
 }
 .lessonChecks{
   display: grid;

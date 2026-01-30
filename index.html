@@ -19,8 +19,8 @@
       </div>
     </div>
     <div class="meta">
-      <span class="pill">v1.0.0</span>
-      <span class="pill">build 8aa7cfcb58</span>
+      <span class="pill">v1.0.1</span>
+      <span class="pill">build b7f2c9e1f0</span>
     </div>
   </header>
 
@@ -57,11 +57,19 @@
           <div class="field">
             <span>Lessons</span>
             <div class="lessonBox">
-              <div class="row gap lessonActions">
-                <button class="btn miniBtn" id="btnLessonAll" type="button">All</button>
-                <button class="btn miniBtn" id="btnLessonNone" type="button">None</button>
-              </div>
-              <div id="lessonChecks" class="lessonChecks"></div>
+              <details class="lessonDropdown">
+                <summary class="lessonSummary">
+                  <span>Choose lessons</span>
+                  <span class="lessonSummaryCount" id="lessonSummaryCount">All</span>
+                </summary>
+                <div class="lessonDropdownBody">
+                  <div class="row gap lessonActions">
+                    <button class="btn miniBtn" id="btnLessonAll" type="button">All</button>
+                    <button class="btn miniBtn" id="btnLessonNone" type="button">None</button>
+                  </div>
+                  <div id="lessonChecks" class="lessonChecks"></div>
+                </div>
+              </details>
             </div>
           </div>
 
