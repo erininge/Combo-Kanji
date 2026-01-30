@@ -2,8 +2,8 @@
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-  const APP_VERSION = "1.0.0";
-  const BUILD = "8aa7cfcb58";
+  const APP_VERSION = "1.0.1";
+  const BUILD = "b7f2c9e1f0";
 
   const STORAGE = {
     stars: "jlptck_stars_v1",
@@ -173,10 +173,24 @@
     return boxes.filter(b => b.checked).map(b => b.value);
   }
 
+  function updateLessonSummary() {
+    const summary = $("#lessonSummaryCount");
+    if (!summary) return;
+    const boxes = $$("#lessonChecks input[type=checkbox]");
+    const total = boxes.length;
+    const checked = boxes.filter(b => b.checked).length;
+    if (!total) {
+      summary.textContent = "No lessons";
+      return;
+    }
+    summary.textContent = checked === total ? `All (${total})` : `${checked}/${total} selected`;
+  }
+
   function persistStudyLessonState() {
     settings.studyLevel = getStudyLevel();
     settings.studyLessons = getCheckedLessonKeys();
     saveJSON(STORAGE.settings, settings);
+    updateLessonSummary();
   }
 
   function setAllLessonsChecked(checked) {
