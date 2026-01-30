@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f14" />
+  <title>JLPT Combo Kanji</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">漢</div>
+      <div>
+        <div class="title">JLPT Combo Kanji</div>
+        <div class="subtitle">Meaning-based compound kanji drills</div>
+      </div>
+    </div>
+    <div class="meta">
+      <span class="pill">v1.0.0</span>
+      <span class="pill">build 8aa7cfcb58</span>
+    </div>
+  </header>
+
+  <main class="container">
+    <nav class="tabs" role="tablist" aria-label="App tabs">
+      <button class="tab active" data-tab="study" role="tab" aria-selected="true">Study</button>
+      <button class="tab" data-tab="view" role="tab">View Words</button>
+      <button class="tab" data-tab="stats" role="tab">Stats</button>
+      <button class="tab" data-tab="settings" role="tab">Settings</button>
+    </nav>
+
+    <section class="card" id="tab-study" role="tabpanel">
+      <div id="studySetup">
+        <div class="row">
+          <h2>Study</h2>
+          <div class="row gap">
+            <button class="btn" id="btnQuickStar" title="Toggle star (~)">☆ Star</button>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <label class="field">
+            <span>N level</span>
+            <select id="selLevel">
+              <option value="all">All</option>
+              <option value="N5">N5</option>
+              <option value="N4">N4</option>
+              <option value="N3">N3</option>
+              <option value="N2">N2</option>
+              <option value="N1">N1</option>
+            </select>
+          </label>
+
+          <div class="field">
+            <span>Lessons</span>
+            <div class="lessonBox">
+              <div class="row gap lessonActions">
+                <button class="btn miniBtn" id="btnLessonAll" type="button">All</button>
+                <button class="btn miniBtn" id="btnLessonNone" type="button">None</button>
+              </div>
+              <div id="lessonChecks" class="lessonChecks"></div>
+            </div>
+          </div>
+
+          <label class="field">
+            <span>Question mode</span>
+            <select id="selMode">
+              <option value="mixed">Mixed</option>
+              <option value="k2m">Kanji → meaning</option>
+              <option value="m2k">Meaning → kanji</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Answer type</span>
+            <select id="selAnswer">
+              <option value="mixed">Mixed</option>
+              <option value="mc">Multiple choice</option>
+              <option value="typing">Typing</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Questions</span>
+            <div class="inline">
+              <label class="mini"><input type="checkbox" id="chkAuto" checked /> Auto</label>
+              <input id="numQ" type="number" min="5" max="200" value="20" />
+            </div>
+          </label>
+
+          <label class="field">
+            <span>Focus</span>
+            <div class="inline">
+              <label class="mini"><input type="checkbox" id="chkStarOnly" /> Starred only</label>
+            </div>
+          </label>
+
+          <label class="field">
+            <span>QoL</span>
+            <div class="inline">
+              <label class="mini"><input type="checkbox" id="chkInstantNext" checked /> Next after correct (MC)</label>
+            </div>
+          </label>
+        </div>
+
+        <div class="row gap">
+          <button class="btn primary" id="btnStart">Start</button>
+          <button class="btn" id="btnPracticeStarred">Practice starred</button>
+        </div>
+
+        <div class="hint">
+          <p><strong>Desktop hotkeys:</strong> <kbd>1</kbd>–<kbd>4</kbd> choose MC answer • <kbd>Enter</kbd> = Check/Next • <kbd>~</kbd> = Star/Unstar</p>
+          <p class="small muted">This game is meaning-based. Readings are optional (Settings → Show readings).</p>
+        </div>
+      </div>
+
+      <div id="studySession" class="hidden">
+        <div class="row">
+          <div>
+            <div class="small muted" id="sessionProgress">—</div>
+            <h2 class="tight" id="promptMain">—</h2>
+            <div class="small muted" id="promptSub"></div>
+          </div>
+          <div class="row gap">
+            <button class="btn" id="btnStar" title="Toggle star (~)">☆</button>
+            <button class="btn" id="btnStop">Stop</button>
+          </div>
+        </div>
+
+        <div class="answerArea">
+          <div id="mcArea" class="hidden">
+            <div class="mcGrid" id="mcGrid"></div>
+          </div>
+
+          <div id="typingArea" class="hidden">
+            <div class="row gap">
+              <div id="typingInputs" class="typingInputs"></div>
+              <button class="btn" id="btnCheck">Check</button>
+            </div>
+            <div class="small muted">Tip: Enter = Check/Next</div>
+          </div>
+
+          <div class="feedback" id="feedback"></div>
+          <div class="row gap answerActions">
+            <button class="btn" id="btnNext" disabled>Next</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card hidden" id="tab-view" role="tabpanel">
+      <div class="row">
+        <h2>View Words</h2>
+        <div class="row gap">
+          <label class="mini"><input type="checkbox" id="viewStarOnly" /> Starred only</label>
+          <button class="btn" id="btnExportStars">Export stars</button>
+          <label class="btn fileBtn">Import stars<input id="fileImportStars" type="file" accept="application/json" /></label>
+        </div>
+      </div>
+
+      <div class="grid2" style="margin-top:10px">
+        <label class="field">
+          <span>N level</span>
+          <select id="viewLevel">
+            <option value="all">All</option>
+            <option value="N5">N5</option>
+            <option value="N4">N4</option>
+            <option value="N3">N3</option>
+            <option value="N2">N2</option>
+            <option value="N1">N1</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Lesson</span>
+          <select id="viewLesson"></select>
+        </label>
+      </div>
+<div class="row gap">
+        <input id="viewSearch" class="typingInput" placeholder="Search word, meaning, or reading…" />
+      </div>
+
+      <div class="list" id="kanjiList"></div>
+    </section>
+
+    <section class="card hidden" id="tab-stats" role="tabpanel">
+      <div class="row">
+        <h2>Stats</h2>
+        <div class="row gap">
+          <button class="btn" id="btnResetStats">Reset stats</button>
+        </div>
+      </div>
+
+      <div class="grid3" id="statsTop"></div>
+
+      <div class="cardInner">
+        <h3>Hardest kanji</h3>
+        <div class="small muted">Highest miss rate (needs more love).</div>
+        <div class="list" id="hardList"></div>
+      </div>
+
+      <div class="cardInner">
+        <h3>By section</h3>
+        <div class="list" id="sectionStats"></div>
+      </div>
+    </section>
+
+    <section class="card hidden" id="tab-settings" role="tabpanel">
+      <div class="row">
+        <h2>Settings</h2>
+        <div class="row gap">
+          <button class="btn" id="btnExportData">Export data</button>
+          <label class="btn fileBtn">Import data<input id="fileImportData" type="file" accept="application/json" /></label>
+          <button class="btn danger" id="btnResetAll">Reset everything</button>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <label class="field">
+          <span>Show readings (when Kanji is the question)</span>
+          <select id="selReadings">
+            <option value="off">Off</option>
+            <option value="on">On</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Multiple choice options</span>
+          <select id="selMcCount">
+            <option value="4">4 (recommended)</option>
+            <option value="3">3</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Multiple typing answers (when available)</span>
+          <select id="selMultiTyping">
+            <option value="on">Enabled</option>
+            <option value="off">Disabled</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="hint">
+        <p class="small muted">Import/export is there so future sections are easy: just add more items (same fields) and import.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div>JLPT_Combo_Kanji • PWA • offline-ready</div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
