@@ -2,19 +2,18 @@
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-  const APP_VERSION = "1.0.1";
-  const BUILD = "b7f2c9e1f0";
+  const APP_VERSION = "1.1.0";
+  const BUILD = "0a2d4c1b6e";
 
   const STORAGE = {
-    stars: "jlptck_stars_v1",
-    stats: "jlptck_stats_v1",
-    settings: "jlptck_settings_v1",
-    data: "jlptck_data_v1",
-    multiTypingOff: "jlptck_multi_typing_off_v1"
+    stars: "jlpt_combo_vocab_stars_v1",
+    stats: "jlpt_combo_vocab_stats_v1",
+    settings: "jlpt_combo_vocab_settings_v1",
+    multiTypingOff: "jlpt_combo_vocab_multi_typing_off_v1"
   };
 
   const defaultSettings = () => ({
-    showReadings: "off",
+    furiganaMode: "off",
     mcCount: 4,
     multiTyping: "on",
     studyLevel: "all",
@@ -37,11 +36,80 @@
   let DATA = null;
   let items = [];
 
+  function clearLegacyStorage() {
+    const legacyPrefixes = ["jlptck_"];
+    Object.keys(localStorage).forEach((key) => {
+      if (legacyPrefixes.some(prefix => key.startsWith(prefix))) {
+        localStorage.removeItem(key);
+      }
+    });
+  }
+
+  function isItemShape(obj) {
+    if (!obj || typeof obj !== "object") return false;
+    return ["id", "expression", "kanji", "word", "term", "meaning", "reading", "readings", "category", "jlpt_level", "level", "section", "lesson", "unit"]
+      .some(key => Object.prototype.hasOwnProperty.call(obj, key));
+  }
+
+  function flattenItems(source, acc = []) {
+    if (Array.isArray(source)) {
+      source.forEach(entry => flattenItems(entry, acc));
+      return acc;
+    }
+    if (source && typeof source === "object") {
+      if (Array.isArray(source.items)) {
+        flattenItems(source.items, acc);
+      } else if (isItemShape(source)) {
+        acc.push(source);
+        return acc;
+      }
+      Object.entries(source).forEach(([key, val]) => {
+        if (key === "items") return;
+        if (typeof val === "object" && val !== null) {
+          flattenItems(val, acc);
+        }
+      });
+    }
+    return acc;
+  }
+
+  function normalizeCategory(value) {
+    if (!value) return "";
+    const normalized = String(value).trim();
+    if (!normalized) return "";
+    const upper = normalized.toUpperCase();
+    return upper.startsWith("N") ? upper : normalized;
+  }
+
+  function normalizeData(raw) {
+    const flat = Array.isArray(raw) ? raw : flattenItems(raw, []);
+    return flat.map((item, index) => {
+      const expression = item.expression ?? item.kanji ?? item.word ?? item.term ?? "";
+      const meaning = item.meaning ?? "";
+      const readings = Array.isArray(item.readings)
+        ? item.readings.filter(Boolean)
+        : (item.reading ? [item.reading] : []);
+      const category = normalizeCategory(item.category ?? item.jlpt_level ?? item.level ?? "");
+      const sectionRaw = item.section ?? item.lesson ?? item.unit ?? "";
+      const section = sectionRaw === "" ? "" : parseInt(sectionRaw, 10);
+      const id = String(item.id ?? `${expression}-${index}`);
+      return {
+        id,
+        kanji: expression,
+        expression,
+        meaning,
+        readings,
+        category,
+        section: Number.isNaN(section) ? "" : section
+      };
+    }).filter(item => item.kanji && item.meaning);
+  }
+
   async function loadData() {
-    const stored = loadJSON(STORAGE.data, null);
-    if (stored && stored.items) return stored;
-    const res = await fetch("data/kanji.json");
-    return await res.json();
+    const res = await fetch("data/combo_vocab.json");
+    const raw = await res.json();
+    const normalized = normalizeData(raw);
+    return { items: normalized };
   }
 
   let settings = loadJSON(STORAGE.settings, defaultSettings());
@@ -176,6 +244,10 @@
   function updateLessonSummary() {
     const summary = $("#lessonSummaryCount");
     if (!summary) return;
+    if (getStudyLevel() === "all") {
+      summary.textContent = "All levels";
+      return;
+    }
     const boxes = $$("#lessonChecks input[type=checkbox]");
     const total = boxes.length;
     const checked = boxes.filter(b => b.checked).length;
@@ -217,17 +289,26 @@
       host.appendChild(wrap);
     };
 
+    const btnAll = $("#btnLessonAll");
+    const btnNone = $("#btnLessonNone");
+
     if (level === "all") {
-      lessonIndex.allPairs.forEach(p => {
-        const val = `${p.lvl}|${p.sec}`;
-        makeBox(val, `${p.lvl} L${p.sec}`);
-      });
-    } else {
-      (lessonIndex.byLevel[level] || []).forEach(sec => {
-        const val = `${level}|${sec}`;
-        makeBox(val, `L${sec}`);
-      });
+      if (btnAll) btnAll.disabled = true;
+      if (btnNone) btnNone.disabled = true;
+      host.innerHTML = `<div class="small muted">Select an N level to choose lessons.</div>`;
+      settings.studyLessons = null;
+      saveJSON(STORAGE.settings, settings);
+      updateLessonSummary();
+      return;
     }
+
+    if (btnAll) btnAll.disabled = false;
+    if (btnNone) btnNone.disabled = false;
+
+    (lessonIndex.byLevel[level] || []).forEach(sec => {
+      const val = `${level}|${sec}`;
+      makeBox(val, `L${sec}`);
+    });
 
     persistStudyLessonState();
   }
@@ -244,13 +325,14 @@
 
     let pool = items;
 
-    if (level !== "all") pool = pool.filter(x => (x.category || x.jlpt_level) === level);
-
-    // If none checked, empty pool (explicit choice)
-    if (selectedLessonKeys.size) {
-      pool = pool.filter(x => selectedLessonKeys.has(`${(x.category||x.jlpt_level||"Unknown")}|${x.section}`));
-    } else {
-      pool = [];
+    if (level !== "all") {
+      pool = pool.filter(x => (x.category || x.jlpt_level) === level);
+      // If none checked, empty pool (explicit choice)
+      if (selectedLessonKeys.size) {
+        pool = pool.filter(x => selectedLessonKeys.has(`${(x.category||x.jlpt_level||"Unknown")}|${x.section}`));
+      } else {
+        pool = [];
+      }
     }
 
     if (starOnly) pool = pool.filter(x => isStarred(x.id));
@@ -293,15 +375,46 @@
     locked = false;
   }
 
+  let furiganaRevealed = false;
+
+  function getPrimaryReading(item) {
+    return item?.readings?.[0] || "";
+  }
+
+  function updateFuriganaUI() {
+    const mode = settings.furiganaMode || "off";
+    const promptSub = $("#promptSub");
+    const btn = $("#btnFurigana");
+    const reading = current ? getPrimaryReading(current) : "";
+    if (!promptSub || !btn) return;
+
+    promptSub.textContent = "";
+    btn.classList.add("hidden");
+    btn.disabled = false;
+
+    if (!current || session?.curMode !== "k2m" || !reading) return;
+
+    if (mode === "always") {
+      promptSub.textContent = `よみ: ${reading}`;
+    } else if (mode === "hint") {
+      btn.classList.remove("hidden");
+      if (furiganaRevealed) {
+        promptSub.textContent = `よみ: ${reading}`;
+        btn.textContent = "Furigana shown";
+        btn.disabled = true;
+      } else {
+        btn.textContent = "Show furigana";
+      }
+    }
+  }
+
   function setPrompt(mode, item) {
-    const showReadings = settings.showReadings === "on";
     if (mode === "k2m") {
       $("#promptMain").textContent = item.kanji;
-      $("#promptSub").textContent = showReadings ? `読み: ${(item.readings||[]).join(" / ")}` : "";
     } else {
       $("#promptMain").textContent = item.meaning;
-      $("#promptSub").textContent = "";
     }
+    updateFuriganaUI();
   }
 
   function buildChoices(mode, item, count) {
@@ -361,6 +474,7 @@
     const answerType = pickAnswerType(session.selAnswer);
     session.curMode = mode;
     session.curAnswerType = answerType;
+    furiganaRevealed = false;
 
     $("#sessionProgress").textContent = `Question ${idx+1}/${session.total} • Streak ${streak}`;
     setPrompt(mode, current);
@@ -376,9 +490,20 @@
     }
   }
 
+  function getFuriganaFeedback() {
+    if (settings.furiganaMode !== "after") return "";
+    if (!current || session?.curMode !== "k2m") return "";
+    const reading = getPrimaryReading(current);
+    return reading ? `よみ: ${reading}` : "";
+  }
+
   function markFeedback(ok, extra="") {
     const fb = $("#feedback");
-    fb.textContent = ok ? `✅ Correct${extra ? " • "+extra : ""}` : `❌ Not quite${extra ? " • "+extra : ""}`;
+    const furigana = getFuriganaFeedback();
+    let text = ok ? "✅ Correct" : "❌ Not quite";
+    if (extra) text += ` • ${extra}`;
+    if (furigana) text += `\n${furigana}`;
+    fb.textContent = text;
     fb.className = ok ? "feedback good" : "feedback bad";
   }
 
@@ -406,6 +531,7 @@
     }
 
     markStat(current, ok);
+    updateFuriganaUI();
 
     const instant = $("#chkInstantNext").checked;
     if (ok && instant) {
@@ -470,6 +596,7 @@
       markFeedback(false, `Answer: ${expected}`);
     }
     markStat(current, ok);
+    updateFuriganaUI();
     $("#btnNext").disabled = false;
   }
 
@@ -480,6 +607,11 @@
   $("#btnStop").addEventListener("click", () => stopSession());
   $("#btnStar").addEventListener("click", () => current && toggleStar(current.id));
   $("#btnQuickStar").addEventListener("click", () => current && toggleStar(current.id));
+  $("#btnFurigana").addEventListener("click", () => {
+    if (!current) return;
+    furiganaRevealed = true;
+    updateFuriganaUI();
+  });
   $("#chkAuto").addEventListener("change", () => { $("#numQ").disabled = $("#chkAuto").checked; });
 
   $("#btnLessonAll").addEventListener("click", () => setAllLessonsChecked(true));
@@ -713,35 +845,17 @@
   });
 
   function renderSettings() {
-    $("#selReadings").value = settings.showReadings || "off";
+    $("#selFurigana").value = settings.furiganaMode || "off";
     $("#selMcCount").value = String(settings.mcCount || 4);
     $("#selMultiTyping").value = settings.multiTyping || "on";
   }
-  $("#selReadings").addEventListener("change", (e) => { settings.showReadings = e.target.value; saveJSON(STORAGE.settings, settings); });
+  $("#selFurigana").addEventListener("change", (e) => {
+    settings.furiganaMode = e.target.value;
+    saveJSON(STORAGE.settings, settings);
+    updateFuriganaUI();
+  });
   $("#selMcCount").addEventListener("change", (e) => { settings.mcCount = parseInt(e.target.value,10); saveJSON(STORAGE.settings, settings); });
   $("#selMultiTyping").addEventListener("change", (e) => { settings.multiTyping = e.target.value; saveJSON(STORAGE.settings, settings); });
-
-  $("#btnExportData").addEventListener("click", () => {
-    const payload = { version:1, items };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "JLPT_Combo_Kanji_data.json";
-    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-  });
-
-  $("#fileImportData").addEventListener("change", async (e) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    try {
-      const payload = JSON.parse(await f.text());
-      if (Array.isArray(payload.items) && payload.items.length) {
-        saveJSON(STORAGE.data, payload);
-        alert("Data imported ✅ Reloading…");
-        location.reload();
-      } else alert("Invalid data file.");
-    } catch { alert("Import failed."); }
-    e.target.value = "";
-  });
 
   $("#btnResetAll").addEventListener("click", () => {
     if (!confirm("Reset EVERYTHING? (data override, stars, stats, settings)")) return;
@@ -750,6 +864,7 @@
   });
 
   async function init() {
+    clearLegacyStorage();
     DATA = await loadData();
     items = DATA.items || [];
     buildLessonIndex();

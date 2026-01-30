@@ -1,11 +1,11 @@
-const CACHE = "jlpt-combo-kanji-v1.0.1-b7f2c9e1f0";
+const CACHE = "jlpt-combo-kanji-v1.1.0-0a2d4c1b6e";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
   "./manifest.json",
-  "./data/kanji.json",
+  "./data/combo_vocab.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./sw.js"

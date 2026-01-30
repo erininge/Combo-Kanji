@@ -19,8 +19,8 @@
       </div>
     </div>
     <div class="meta">
-      <span class="pill">v1.0.1</span>
-      <span class="pill">build b7f2c9e1f0</span>
+      <span class="pill">v1.1.0</span>
+      <span class="pill">build 0a2d4c1b6e</span>
     </div>
   </header>
 
@@ -121,7 +121,7 @@
 
         <div class="hint">
           <p><strong>Desktop hotkeys:</strong> <kbd>1</kbd>–<kbd>4</kbd> choose MC answer • <kbd>Enter</kbd> = Check/Next • <kbd>~</kbd> = Star/Unstar</p>
-          <p class="small muted">This game is meaning-based. Readings are optional (Settings → Show readings).</p>
+          <p class="small muted">This game is meaning-based. Furigana is optional (Settings → Furigana).</p>
         </div>
       </div>
 
@@ -133,6 +133,7 @@
             <div class="small muted" id="promptSub"></div>
           </div>
           <div class="row gap">
+            <button class="btn hidden" id="btnFurigana" type="button">Show furigana</button>
             <button class="btn" id="btnStar" title="Toggle star (~)">☆</button>
             <button class="btn" id="btnStop">Stop</button>
           </div>
@@ -219,18 +220,18 @@
       <div class="row">
         <h2>Settings</h2>
         <div class="row gap">
-          <button class="btn" id="btnExportData">Export data</button>
-          <label class="btn fileBtn">Import data<input id="fileImportData" type="file" accept="application/json" /></label>
           <button class="btn danger" id="btnResetAll">Reset everything</button>
         </div>
       </div>
 
       <div class="grid2">
         <label class="field">
-          <span>Show readings (when Kanji is the question)</span>
-          <select id="selReadings">
+          <span>Furigana</span>
+          <select id="selFurigana">
             <option value="off">Off</option>
-            <option value="on">On</option>
+            <option value="hint">Hint</option>
+            <option value="after">After Answer</option>
+            <option value="always">Always</option>
           </select>
         </label>
 
@@ -252,7 +253,7 @@
       </div>
 
       <div class="hint">
-        <p class="small muted">Import/export is there so future sections are easy: just add more items (same fields) and import.</p>
+        <p class="small muted">Your settings and stars stay on this device.</p>
       </div>
     </section>
   </main>
