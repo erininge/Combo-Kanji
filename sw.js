@@ -1,4 +1,4 @@
-const CACHE = "jlpt-combo-kanji-v1.1.0-0a2d4c1b6e";
+const CACHE = "jlpt-combo-kanji-v1.1.1-5f3c8c7f20";
 const ASSETS = [
   "./",
   "./index.html",
@@ -23,6 +23,21 @@ self.addEventListener("activate", (e) => {
 });
 
 self.addEventListener("fetch", (e) => {
+  const url = new URL(e.request.url);
+  if (url.pathname.endsWith("/data/combo_vocab.json")) {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        if (!res.ok) throw new Error("Dataset fetch failed");
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy)).catch(()=>{});
+        return res;
+      }).catch(() => new Response(JSON.stringify({ error: "Dataset fetch failed" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" }
+      }))
+    );
+    return;
+  }
   e.respondWith(
     caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
       const copy = res.clone();

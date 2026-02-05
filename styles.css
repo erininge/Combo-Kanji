@@ -62,6 +62,11 @@ body{
   flex-direction:column;
   gap:14px;
 }
+.loadingState{
+  max-width: 640px;
+  margin: 24px auto;
+  text-align:center;
+}
 .card{
   background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
   border:1px solid rgba(255,255,255,.10);

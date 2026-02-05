@@ -19,12 +19,18 @@
       </div>
     </div>
     <div class="meta">
-      <span class="pill">v1.1.0</span>
-      <span class="pill">build 0a2d4c1b6e</span>
+      <span class="pill">v1.1.1</span>
+      <span class="pill">build 5f3c8c7f20</span>
     </div>
   </header>
 
-  <main class="container">
+  <div id="loadingState" class="card loadingState">Loading…</div>
+  <div id="loadError" class="card loadingState hidden">
+    <h2>Unable to load data</h2>
+    <p class="small muted" id="loadErrorMessage">Please refresh and try again.</p>
+  </div>
+
+  <main id="appRoot" class="container hidden">
     <nav class="tabs" role="tablist" aria-label="App tabs">
       <button class="tab active" data-tab="study" role="tab" aria-selected="true">Study</button>
       <button class="tab" data-tab="view" role="tab">View Words</button>

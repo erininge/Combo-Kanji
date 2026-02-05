@@ -2,8 +2,8 @@
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-  const APP_VERSION = "1.1.0";
-  const BUILD = "0a2d4c1b6e";
+  const APP_VERSION = "1.1.1";
+  const BUILD = "5f3c8c7f20";
 
   const STORAGE = {
     stars: "jlpt_combo_vocab_stars_v1",
@@ -35,6 +35,18 @@
 
   let DATA = null;
   let items = [];
+  let availableLessonsByCategory = null;
+
+  function setLoadingState({ loading, error, message } = {}) {
+    const loadingEl = $("#loadingState");
+    const errorEl = $("#loadError");
+    const errorMsg = $("#loadErrorMessage");
+    const appRoot = $("#appRoot");
+    if (loadingEl) loadingEl.classList.toggle("hidden", !loading);
+    if (errorEl) errorEl.classList.toggle("hidden", !error);
+    if (appRoot) appRoot.classList.toggle("hidden", loading || error);
+    if (errorMsg && message) errorMsg.textContent = message;
+  }
 
   function clearLegacyStorage() {
     const legacyPrefixes = ["jlptck_"];
@@ -73,43 +85,73 @@
     return acc;
   }
 
+  const JLPT_LEVELS = ["N5", "N4", "N3", "N2", "N1"];
+
   function normalizeCategory(value) {
-    if (!value) return "";
+    if (value === null || value === undefined) return "";
     const normalized = String(value).trim();
     if (!normalized) return "";
     const upper = normalized.toUpperCase();
-    return upper.startsWith("N") ? upper : normalized;
+    const match = upper.match(/N?([1-5])/);
+    if (!match) return "";
+    return `N${match[1]}`;
+  }
+
+  function normalizeReadings(readings, reading) {
+    const base = Array.isArray(readings) ? readings : (reading ? [reading] : []);
+    return base
+      .flatMap(entry => String(entry).split(/[;,/]/))
+      .map(entry => entry.trim())
+      .filter(Boolean);
   }
 
   function normalizeData(raw) {
     const flat = Array.isArray(raw) ? raw : flattenItems(raw, []);
     return flat.map((item, index) => {
-      const expression = item.expression ?? item.kanji ?? item.word ?? item.term ?? "";
-      const meaning = item.meaning ?? "";
-      const readings = Array.isArray(item.readings)
-        ? item.readings.filter(Boolean)
-        : (item.reading ? [item.reading] : []);
+      const expressionRaw = item.expression ?? item.kanji ?? item.term ?? item.word ?? "";
+      const expression = String(expressionRaw ?? "").trim();
+      const meaning = String(item.meaning ?? "").trim();
+      const readings = normalizeReadings(item.readings, item.reading);
       const category = normalizeCategory(item.category ?? item.jlpt_level ?? item.level ?? "");
       const sectionRaw = item.section ?? item.lesson ?? item.unit ?? "";
-      const section = sectionRaw === "" ? "" : parseInt(sectionRaw, 10);
-      const id = String(item.id ?? `${expression}-${index}`);
+      const section = parseInt(sectionRaw, 10);
+      const id = String(item.id ?? `${expression || "item"}-${index}`);
       return {
         id,
-        kanji: expression,
         expression,
         meaning,
         readings,
         category,
-        section: Number.isNaN(section) ? "" : section
+        section,
+        kanji: expression
       };
-    }).filter(item => item.kanji && item.meaning);
+    });
+  }
+
+  function computeAvailableLessonsByCategory(list) {
+    const byCategory = Object.fromEntries(JLPT_LEVELS.map(level => [level, new Set()]));
+    list.forEach(item => {
+      if (!JLPT_LEVELS.includes(item.category)) return;
+      if (!Number.isInteger(item.section)) return;
+      byCategory[item.category].add(item.section);
+    });
+    return JLPT_LEVELS.reduce((acc, level) => {
+      acc[level] = Array.from(byCategory[level]).sort((a, b) => a - b);
+      return acc;
+    }, {});
   }
 
   async function loadData() {
-    const res = await fetch("data/combo_vocab.json");
+    const res = await fetch("data/combo_vocab.json", { cache: "no-store" });
+    if (!res.ok) {
+      throw new Error(`Dataset fetch failed (${res.status})`);
+    }
     const raw = await res.json();
     const normalized = normalizeData(raw);
-    return { items: normalized };
+    const lessonsByCategory = computeAvailableLessonsByCategory(normalized);
+    const example = normalized[0] ? JSON.stringify(normalized[0]) : "none";
+    console.log(`Loaded ${normalized.length} items; example: ${example}`);
+    return { items: normalized, availableLessonsByCategory: lessonsByCategory };
   }
 
   let settings = loadJSON(STORAGE.settings, defaultSettings());
@@ -218,17 +260,10 @@
   let lessonIndex = null; // { levels: ["N5"...], byLevel: {N5:[1,2..]}, allPairs:[{lvl,sec}...] }
 
   function buildLessonIndex() {
-    const byLevel = {};
-    items.forEach(it => {
-      const lvl = it.category || it.jlpt_level || "Unknown";
-      const sec = parseInt(it.section, 10);
-      if (!lvl || Number.isNaN(sec)) return;
-      if (!byLevel[lvl]) byLevel[lvl] = new Set();
-      byLevel[lvl].add(sec);
-    });
-    const levels = ["N5","N4","N3","N2","N1"].filter(l => byLevel[l]);
+    if (!availableLessonsByCategory) return;
+    const levels = JLPT_LEVELS.filter(l => (availableLessonsByCategory[l] || []).length);
     const outByLevel = {};
-    levels.forEach(l => outByLevel[l] = Array.from(byLevel[l]).sort((a,b)=>a-b));
+    levels.forEach(l => outByLevel[l] = availableLessonsByCategory[l]);
     const allPairs = [];
     levels.forEach(l => outByLevel[l].forEach(sec => allPairs.push({lvl:l, sec})));
     lessonIndex = { levels, byLevel: outByLevel, allPairs };
@@ -279,12 +314,13 @@
     if (!lessonIndex) return;
 
     const restoreSet = (!resetToAll && Array.isArray(settings.studyLessons)) ? new Set(settings.studyLessons) : null;
+    let activeRestoreSet = restoreSet;
 
     const makeBox = (val, label) => {
       const wrap = document.createElement("label");
       wrap.innerHTML = `<input type="checkbox" value="${val}" /> <span>${label}</span>`;
       const cb = wrap.querySelector("input");
-      cb.checked = restoreSet ? restoreSet.has(val) : true;
+      cb.checked = activeRestoreSet ? activeRestoreSet.has(val) : true;
       cb.addEventListener("change", () => persistStudyLessonState());
       host.appendChild(wrap);
     };
@@ -295,7 +331,7 @@
     if (level === "all") {
       if (btnAll) btnAll.disabled = true;
       if (btnNone) btnNone.disabled = true;
-      host.innerHTML = `<div class="small muted">Select an N level to choose lessons.</div>`;
+      host.innerHTML = `<div class="small muted">Select an N-level to choose lessons.</div>`;
       settings.studyLessons = null;
       saveJSON(STORAGE.settings, settings);
       updateLessonSummary();
@@ -305,7 +341,31 @@
     if (btnAll) btnAll.disabled = false;
     if (btnNone) btnNone.disabled = false;
 
-    (lessonIndex.byLevel[level] || []).forEach(sec => {
+    const lessons = lessonIndex.byLevel[level] || [];
+    const availableValues = new Set(lessons.map(sec => `${level}|${sec}`));
+    const cleanedRestoreSet = restoreSet
+      ? new Set(Array.from(restoreSet).filter(val => availableValues.has(val)))
+      : null;
+
+    if (restoreSet && cleanedRestoreSet.size !== restoreSet.size) {
+      settings.studyLessons = cleanedRestoreSet.size ? Array.from(cleanedRestoreSet) : null;
+      saveJSON(STORAGE.settings, settings);
+    }
+    if (cleanedRestoreSet) {
+      activeRestoreSet = cleanedRestoreSet;
+    }
+
+    if (!lessons.length) {
+      if (btnAll) btnAll.disabled = true;
+      if (btnNone) btnNone.disabled = true;
+      host.innerHTML = `<div class="small muted">No lessons available for ${level}.</div>`;
+      settings.studyLessons = null;
+      saveJSON(STORAGE.settings, settings);
+      updateLessonSummary();
+      return;
+    }
+
+    lessons.forEach(sec => {
       const val = `${level}|${sec}`;
       makeBox(val, `L${sec}`);
     });
@@ -326,10 +386,10 @@
     let pool = items;
 
     if (level !== "all") {
-      pool = pool.filter(x => (x.category || x.jlpt_level) === level);
+      pool = pool.filter(x => x.category === level);
       // If none checked, empty pool (explicit choice)
       if (selectedLessonKeys.size) {
-        pool = pool.filter(x => selectedLessonKeys.has(`${(x.category||x.jlpt_level||"Unknown")}|${x.section}`));
+        pool = pool.filter(x => selectedLessonKeys.has(`${x.category || "Unknown"}|${x.section}`));
       } else {
         pool = [];
       }
@@ -663,6 +723,15 @@
     if (!lessonIndex) return;
 
     if (lvl === "all") {
+      if (!lessonIndex.allPairs.length) {
+        const o = document.createElement("option");
+        o.value = "none";
+        o.textContent = "No lessons available";
+        o.disabled = true;
+        sel.appendChild(o);
+        sel.value = "all";
+        return;
+      }
       lessonIndex.allPairs.forEach(p => {
         const o = document.createElement("option");
         o.value = `${p.lvl}|${p.sec}`;
@@ -670,7 +739,17 @@
         sel.appendChild(o);
       });
     } else {
-      (lessonIndex.byLevel[lvl] || []).forEach(sec => {
+      const lessons = lessonIndex.byLevel[lvl] || [];
+      if (!lessons.length) {
+        const o = document.createElement("option");
+        o.value = "none";
+        o.textContent = `No lessons for ${lvl}`;
+        o.disabled = true;
+        sel.appendChild(o);
+        sel.value = "all";
+        return;
+      }
+      lessons.forEach(sec => {
         const o = document.createElement("option");
         o.value = `${lvl}|${sec}`;
         o.textContent = `L${sec}`;
@@ -688,8 +767,8 @@
     const lesson = $("#viewLesson")?.value || "all";
 
     let list = items.slice();
-    if (lvl !== "all") list = list.filter(x => (x.category||x.jlpt_level) === lvl);
-    if (lesson !== "all") list = list.filter(x => `${(x.category||x.jlpt_level||"Unknown")}|${x.section}` === lesson);
+    if (lvl !== "all") list = list.filter(x => x.category === lvl);
+    if (lesson !== "all") list = list.filter(x => `${x.category || "Unknown"}|${x.section}` === lesson);
     if (starOnly) list = list.filter(x => isStarred(x.id));
     if (q) {
       list = list.filter(x =>
@@ -865,22 +944,34 @@
 
   async function init() {
     clearLegacyStorage();
-    DATA = await loadData();
-    items = DATA.items || [];
-    buildLessonIndex();
+    setLoadingState({ loading: true });
+    try {
+      DATA = await loadData();
+      items = DATA.items || [];
+      availableLessonsByCategory = DATA.availableLessonsByCategory || null;
+      buildLessonIndex();
 
-    // Restore filter selections
-    $("#selLevel").value = settings.studyLevel || "all";
-    $("#viewLevel").value = settings.viewLevel || "all";
+      // Restore filter selections
+      $("#selLevel").value = settings.studyLevel || "all";
+      $("#viewLevel").value = settings.viewLevel || "all";
 
-    renderStudyLessons(false);
-    renderViewLessonOptions();
+      renderStudyLessons(false);
+      renderViewLessonOptions();
 
-    $("#chkAuto").dispatchEvent(new Event("change"));
-    setTab("study");
+      $("#chkAuto").dispatchEvent(new Event("change"));
+      setTab("study");
 
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(()=>{}));
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(()=>{}));
+      }
+      setLoadingState({ loading: false });
+    } catch (err) {
+      console.error(err);
+      setLoadingState({
+        loading: false,
+        error: true,
+        message: "Unable to load the dataset. Please refresh and try again."
+      });
     }
   }
   init();
